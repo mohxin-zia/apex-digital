@@ -5,6 +5,7 @@ import { ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { FloatingField } from "@/components/forms/FloatingField";
+import { submitToWeb3Forms } from "@/lib/web3forms";
 
 const schema = z.object({
   name: z.string().trim().min(2, "Please enter your name").max(100),
@@ -18,16 +19,24 @@ type Data = z.infer<typeof schema>;
 type Errors = Partial<Record<keyof Data, string>>;
 
 export function HeroContactForm() {
-  const [data, setData] = useState<Data>({ name: "", email: "", phone: "", practice: "", smsConsent: false });
+  const [data, setData] = useState<Data>({
+    name: "",
+    email: "",
+    phone: "",
+    practice: "",
+    smsConsent: false,
+  });
   const [errors, setErrors] = useState<Errors>({});
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const update = <K extends keyof Data>(k: K, v: Data[K]) => {
     setData((d) => ({ ...d, [k]: v }));
     setErrors((e) => ({ ...e, [k]: undefined }));
   };
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const r = schema.safeParse(data);
     if (!r.success) {
@@ -36,7 +45,26 @@ export function HeroContactForm() {
       setErrors(errs);
       return;
     }
-    setSent(true);
+
+    setSubmitting(true);
+    setSubmitError(null);
+    const res = await submitToWeb3Forms(
+      {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        practice: data.practice,
+        sms_consent: data.smsConsent ? "Yes" : "No",
+      },
+      { subject: "New free practice audit request — APEX", from_name: data.name },
+    );
+    setSubmitting(false);
+
+    if (res.success) {
+      setSent(true);
+    } else {
+      setSubmitError(res.message);
+    }
   };
 
   return (
@@ -57,7 +85,6 @@ export function HeroContactForm() {
                 Get a Free Practice Audit
               </h3>
             </div>
-
           </div>
 
           {sent ? (
@@ -73,7 +100,10 @@ export function HeroContactForm() {
           ) : (
             <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
               <p className="text-[10px] leading-relaxed text-muted-foreground bg-muted/20 p-3 rounded-xl border border-border/50">
-                By providing a phone number and submitting this form, you are consenting to be contacted by SMS text message from Apex Medical Billing Services. Message & data rates may apply. Message frequency may vary. You can reply STOP to opt-out of further messaging and HELP for more information. View our Privacy Policy here:{" "}
+                By providing a phone number and submitting this form, you are consenting to be
+                contacted by SMS text message from Apex Medical Billing Services. Message & data
+                rates may apply. Message frequency may vary. You can reply STOP to opt-out of
+                further messaging and HELP for more information. View our Privacy Policy here:{" "}
                 <Link to="/privacy" className="text-brand font-medium hover:underline">
                   Privacy Policy
                 </Link>
@@ -121,14 +151,36 @@ export function HeroContactForm() {
                     onChange={(e) => update("smsConsent", e.target.checked)}
                     className="mt-1 h-3.5 w-3.5 shrink-0 rounded border-border text-brand focus:ring-brand"
                   />
-                  <label htmlFor="hero-smsConsent" className="text-[11px] text-muted-foreground leading-tight">
+                  <label
+                    htmlFor="hero-smsConsent"
+                    className="text-[11px] text-muted-foreground leading-tight"
+                  >
                     I agree to receive SMS communications from Apex Medical Billing Services.
                   </label>
                 </div>
-                {errors.smsConsent && <p className="text-[10px] font-medium text-destructive pl-5">{errors.smsConsent}</p>}
+                {errors.smsConsent && (
+                  <p className="text-[10px] font-medium text-destructive pl-5">
+                    {errors.smsConsent}
+                  </p>
+                )}
               </div>
-              <Button type="submit" variant="glow" size="lg" className="w-full">
-                Request Free Audit <ArrowRight className="h-4 w-4" />
+              {submitError && (
+                <p className="text-[11px] font-medium text-destructive">{submitError}</p>
+              )}
+              <Button
+                type="submit"
+                variant="glow"
+                size="lg"
+                className="w-full"
+                disabled={submitting}
+              >
+                {submitting ? (
+                  "Sending…"
+                ) : (
+                  <>
+                    Request Free Audit <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
               </Button>
               <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
                 <ShieldCheck className="h-3.5 w-3.5 text-brand" />

@@ -6,6 +6,7 @@ import { SiteLayout } from "@/components/site/SiteLayout";
 import { PageHero } from "@/components/site/PageHero";
 import { Button } from "@/components/ui/button";
 import { FloatingField } from "@/components/forms/FloatingField";
+import { submitToWeb3Forms } from "@/lib/web3forms";
 
 export const Route = createFileRoute("/contact")({
   head: () => ({
@@ -35,13 +36,15 @@ function ContactPage() {
   const [data, setData] = useState<FormData>({ name: "", email: "", phone: "", service: "", message: "", smsConsent: false });
   const [errors, setErrors] = useState<Errors>({});
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const update = <K extends keyof FormData>(k: K, v: FormData[K]) => {
     setData((d) => ({ ...d, [k]: v }));
     setErrors((e) => ({ ...e, [k]: undefined }));
   };
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const result = contactSchema.safeParse(data);
     if (!result.success) {
@@ -53,7 +56,27 @@ function ContactPage() {
       setErrors(errs);
       return;
     }
-    setSent(true);
+
+    setSubmitting(true);
+    setSubmitError(null);
+    const res = await submitToWeb3Forms(
+      {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        service: data.service,
+        message: data.message,
+        sms_consent: data.smsConsent ? "Yes" : "No",
+      },
+      { subject: "New contact enquiry — APEX Medical Billing", from_name: data.name },
+    );
+    setSubmitting(false);
+
+    if (res.success) {
+      setSent(true);
+    } else {
+      setSubmitError(res.message);
+    }
   };
 
   return (
@@ -162,8 +185,11 @@ function ContactPage() {
                     </div>
                     {errors.smsConsent && <p className="text-xs font-medium text-destructive">{errors.smsConsent}</p>}
                   </div>
-                  <Button type="submit" variant="glow" size="xl" className="w-full">
-                    Send message <Send className="h-4 w-4" />
+                  {submitError && (
+                    <p className="text-sm font-medium text-destructive">{submitError}</p>
+                  )}
+                  <Button type="submit" variant="glow" size="xl" className="w-full" disabled={submitting}>
+                    {submitting ? "Sending…" : (<>Send message <Send className="h-4 w-4" /></>)}
                   </Button>
                 </form>
               )}
